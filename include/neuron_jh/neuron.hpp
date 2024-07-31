@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <vector>
 #include <cmath>//说了是cmath
 #include <ranges>
@@ -6,20 +7,43 @@
 using value_t = float;
 
 template<typename TActFn, typename TVal = value_t>
-struct Cynapse;
+class Neuron;
 
+//轴突
 template<typename TActFn, typename TVal = value_t>
+struct Axon
+{
+    using NeuronType = Neuron<TActFn, TVal>;
+    NeuronType* receiver;
+    TVal weight;
+};
+
+//树突
+template<typename TActFn, typename TVal = value_t>
+struct Dendrite
+{
+    using NeuronType = Neuron<TActFn, TVal>;
+    NeuronType* sender;
+    size_t axon_index;
+
+    TVal value()const
+    {
+        return sender->axons_[axon_index].weight * sender->value();
+    }
+};
+
+template<typename TActFn, typename TVal>
 class Neuron
 {
-    
-    using CynapseType = Cynapse<TActFn, TVal>;
-    friend  CynapseType;
-    
+    using AxonType = Axon<TActFn, TVal>;
+    using DendriteType = Dendrite<TActFn, TVal>;
+    friend DendriteType;
+
     TVal value_;
     TActFn activation_fn_;
     
-    std::vector<CynapseType*> inputs_;
-    std::vector<CynapseType*> outputs_;
+    std::vector<DendriteType> dendrites_;
+    std::vector<AxonType> axons_;
 
 public:
 
@@ -31,50 +55,17 @@ public:
     void update()
     {
         TVal input_sum = 0;
-        for(auto input : inputs_)
+        for(auto dendrite : dendrites_)
         {
-            input_sum += input->input->value_ * input->weight;
+            input_sum += dendrite.value();
         }
         value_ = activation_fn_(input_sum);
     }
 
-    friend CynapseType& connect(Neuron& input, Neuron& output, TVal weight)
+    static void connect(Neuron& sender, Neuron& receiver, TVal weight)
     {
-        CynapseType* cynapse = new CynapseType{ weight, &input, &output };
-        input.outputs_.push_back(cynapse);
-        output.inputs_.push_back(cynapse);
-        return *cynapse;
-    }
-
-    ~Neuron()
-    {
-        //删除神经元会将与其连接的突出全部删除
-        while(inputs_.size() != 0)
-        {
-            delete inputs_[0];
-        }
-        while(outputs_.size() != 0)
-        {
-            delete outputs_[0];
-        }
-    }
-};
-
-template<typename TActFn, typename TVal>
-struct Cynapse
-{
-    using NeuronType = Neuron<TActFn, TVal>;
-
-    TVal weight;
-    NeuronType* input;
-    NeuronType* output;
-
-    ~Cynapse()//析构函数，如果这个突出被删除要做什么
-    {
-        //删除输入神经元里记录的自己
-        std::erase_if(input->outputs_, [&](auto p){ return p == this; });
-        //删除输出神经元里记录的自己
-        std::erase_if(output->inputs_, [&](auto p){ return p == this; });
+        sender.axons_.push_back({ &receiver, weight });
+        receiver.dendrites_.push_back({ &sender, sender.axons_.size() - 1 });
     }
 };
 
