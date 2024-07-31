@@ -15,52 +15,47 @@ class Neuron
     using CynapseType = Cynapse<TActFn, TVal>;
     friend  CynapseType;
     
-    TVal value;
-    TActFn activation_fn;
+    TVal value_;
+    TActFn activation_fn_;
     
-    std::vector<CynapseType*> inputs;
-    std::vector<CynapseType*> outputs;
+    std::vector<CynapseType*> inputs_;
+    std::vector<CynapseType*> outputs_;
 
 public:
 
-    void set_value(TVal value)
+    TVal& value()
     {
-        this->value = value;
-    }
-
-    TVal get_value()const
-    {
-        return value;
+        return value_;
     }
 
     void update()
     {
         TVal input_sum = 0;
-        for(auto input : inputs)
+        for(auto input : inputs_)
         {
-            input_sum += input->input->value * input->weight;
+            input_sum += input->input->value_ * input->weight;
         }
-        value = activation_fn(input_sum);
+        value_ = activation_fn_(input_sum);
     }
 
     friend CynapseType& connect(Neuron& input, Neuron& output, TVal weight)
     {
         CynapseType* cynapse = new CynapseType{ weight, &input, &output };
-        input.outputs.push_back(cynapse);
-        output.inputs.push_back(cynapse);
+        input.outputs_.push_back(cynapse);
+        output.inputs_.push_back(cynapse);
         return *cynapse;
     }
 
     ~Neuron()
     {
         //删除神经元会将与其连接的突出全部删除
-        for(auto input : inputs)
+        while(inputs_.size() != 0)
         {
-            delete input;
+            delete inputs_[0];
         }
-        for(auto output : outputs)
+        while(outputs_.size() != 0)
         {
-            delete output;
+            delete outputs_[0];
         }
     }
 };
@@ -77,9 +72,9 @@ struct Cynapse
     ~Cynapse()//析构函数，如果这个突出被删除要做什么
     {
         //删除输入神经元里记录的自己
-        std::ranges::remove_if(input->outputs, [&](auto p){ return p == this; });
+        std::erase_if(input->outputs_, [&](auto p){ return p == this; });
         //删除输出神经元里记录的自己
-        std::ranges::remove_if(output->inputs, [&](auto p){ return p == this; });
+        std::erase_if(output->inputs_, [&](auto p){ return p == this; });
     }
 };
 
