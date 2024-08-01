@@ -25,11 +25,6 @@ struct Dendrite
     using NeuronType = Neuron<TActFn, TVal>;
     NeuronType* sender;
     size_t axon_index;
-
-    TVal value()const
-    {
-        return sender->axons_[axon_index].weight * sender->value();
-    }
 };
 
 template<typename TActFn, typename TVal>
@@ -52,14 +47,41 @@ public:
         return value_;
     }
 
+    TVal input()const
+    {
+        TVal input = 0;
+        for(auto [sender, axon_index] : dendrites_)
+        {
+            input += sender->axons_[axon_index].weight * sender->value();
+        }
+        return input;
+    }
+
     void update()
     {
-        TVal input_sum = 0;
-        for(auto dendrite : dendrites_)
+        value_ = activation_fn_(input());
+    }
+
+    TVal inverse_input()const
+    {
+        TVal input = 0;
+        for(auto [receiver, weight] : axons_)
         {
-            input_sum += dendrite.value();
+            input += weight * receiver->value();
         }
-        value_ = activation_fn_(input_sum);
+        return input;
+    }
+
+    void inverse_update(TVal learning_rate)
+    {
+        auto inverse_value = inverse_input() * derivation(activation_fn_)(input());
+
+        for(auto& [receiver, weight] : axons_)
+        {
+            weight -= learning_rate * value_ * receiver->value();
+        }
+
+        value_ = inverse_value;
     }
 
     static void connect(Neuron& sender, Neuron& receiver, TVal weight)
@@ -77,6 +99,12 @@ struct Sigmoid
         return static_cast<TVal>(1.0) / (static_cast<TVal>(1.0) + std::exp(-x));
     }
 };
+
+template<typename TVal>
+constexpr auto derivation(Sigmoid<TVal> sigmoid)
+{
+    return [=](TVal x){ return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x)); };
+}
 
 template<typename TVal = value_t>
 struct Tanh
