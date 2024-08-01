@@ -58,7 +58,7 @@ void unary_fn_test(auto fn, float start, float end, float step = 0.05f, float lo
         //system("PAUSE");
     }while(max_loss > loss_target);
     
-    std::cout << "learning complete. n:" << n << " max_loss: " << max_loss << std::endl;
+    std::cout << "learning complete. learning cycles count:" << n << " final_max_loss: " << max_loss << std::endl;
 
     float x;
     char buff[255]{};
