@@ -3,27 +3,7 @@
 #include <neuron_jh/neuron.hpp>
 
 
-struct Lambda0
-{
-    int offset;
-
-    auto operator()(int x)const
-    {
-        return x + offset;
-    }
-};
-
-int fn(int x)
-{
-    return x;
-}
-
-int fn2(int x)
-{
-    return x + 233;
-}
-
-int main()
+void unary_fn_test(auto fn, float start, float end, float step = 0.05f, float loss_target = 0.00001f, float learning_rate = 0.5f)
 {
     Neuron<Sigmoid<>> a{};
 
@@ -41,11 +21,7 @@ int main()
     Neuron<Sigmoid<>>::connect(b1, c, -1.0f);
     Neuron<Sigmoid<>>::connect(b2, c, 1.0f);
     Neuron<Sigmoid<>>::connect(b3, c, -1.0f);
-    Neuron<Sigmoid<>>::connect(b4, c, 1.0f);
-
-    float learning_rate = 0.5f;
-
-    
+    Neuron<Sigmoid<>>::connect(b4, c, 1.0f);    
 
     float max_loss = 0.0f;
     size_t n = 0;
@@ -53,7 +29,7 @@ int main()
     {
         ++n;
         max_loss = 0.0f;
-        for(float x = 0.0f; x < 1.1f; x += 0.1f)
+        for(float x = start; x < end; x += step)
         {
             a.value() = x;
             b1.update();
@@ -62,7 +38,7 @@ int main()
             b4.update();
             c.update();
 
-            float target = 0.5f * x;
+            float target = fn(x);
             float error = c.value() - target;
             float loss = error * error;
 
@@ -80,13 +56,17 @@ int main()
         }
         //std::cout << "max_loss: " << max_loss << std::endl;
         //system("PAUSE");
-    }while(max_loss > 0.00001f);
+    }while(max_loss > loss_target);
     
-    std::cout << "learning complete. n:" << n << " max_loss: " << max_loss << std::endl;
+    std::cout << "learning complete. learning cycles count:" << n << " final_max_loss: " << max_loss << std::endl;
 
     float x;
-    while((std::cout << "input: ", std::cin >> x))
+    char buff[255]{};
+    
+    while((std::cout << "input: ", std::cin.getline(buff, 254), strlen(buff) != 0))
     {
+        x = atof(buff);
+
         a.value() = x;
         b1.update();
         b2.update();
@@ -94,10 +74,17 @@ int main()
         b4.update();
         c.update();
 
-        float target = 0.5f * x;
+        float target = fn(x);
         float error = c.value() - target;
         float loss = error * error;
 
-        std::cout << ", output: " << c.value() << ", target: " << target << ", loss: " << loss << std::endl;
+        std::cout << "output: " << c.value() << ", target: " << target << ", loss: " << loss << std::endl;
     }
+
+    std::cout << "unary_fn_test exit.\n";
+}
+
+int main()
+{
+    unary_fn_test([](auto x){ return 0.5f * x * x; }, 0.0f, 1.1f, 0.1f, 0.00001f, 0.5f);
 }
