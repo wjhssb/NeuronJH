@@ -34,6 +34,7 @@ class Neuron
     using DendriteType = Dendrite<TActFn, TVal>;
     friend DendriteType;
 
+    TVal input_;
     TVal value_;
     TActFn activation_fn_;
     
@@ -49,17 +50,17 @@ public:
 
     TVal input()const
     {
-        TVal input = 0;
-        for(auto [sender, axon_index] : dendrites_)
-        {
-            input += sender->axons_[axon_index].weight * sender->value();
-        }
-        return input;
+        return input_;
     }
 
     void update()
     {
-        value_ = activation_fn_(input());
+        input_ = 0;
+        for(auto [sender, axon_index] : dendrites_)
+        {
+            input_ += sender->axons_[axon_index].weight * sender->value();
+        }
+        value_ = activation_fn_(input_);
     }
 
     TVal inverse_input()const
@@ -103,7 +104,7 @@ struct Sigmoid
 template<typename TVal>
 constexpr auto derivation(Sigmoid<TVal> sigmoid)
 {
-    return [=](TVal x){ return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x)); };
+    return [=](TVal x){  return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x)); };
 }
 
 template<typename TVal = value_t>

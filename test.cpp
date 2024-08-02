@@ -3,9 +3,12 @@
 #include <random>
 #include <array>
 #include <fstream>
+#include <functional>
+#include <thread>
+#include <chrono>
+#include <semaphore>
 #include <ranges>
 #include <neuron_jh/neuron.hpp>
-
 
 void unary_fn_test(auto fn, float start, float end, float step = 0.05f, float loss_target = 0.00001f, float learning_rate = 0.5f)
 {
@@ -143,6 +146,112 @@ auto read_minist_set(const char* label_path, const char* image_path)
     return ResultType{ labels.size(), image_size, std::move(labels), std::move(images) };
 }
 
+class thread
+{
+    std::function<void()> task_;
+    std::binary_semaphore have_task_{ 0 };
+    std::binary_semaphore task_complete_{ 0 };
+    std::thread base_;
+
+public:
+    thread() : base_{ [&]{ while(true){ have_task_.acquire(); task_(); task_complete_.release(); } } }
+    {}
+
+    ~thread()
+    {
+        base_.join();
+    }
+
+    template<typename F>
+    void do_task(F&& task)
+    {
+        task_ = std::forward<F>(task);
+        have_task_.release();
+    }
+
+    void wait_idle()
+    {
+        task_complete_.acquire();
+    }
+};
+
+void for_each(size_t size, auto&& fn)
+{
+    static thread threads[3]{};
+
+    size_t block_size = size / 4;
+
+    // threads[0].do_task([&]{  
+    //     for(size_t i = 0; i < block_size; ++i)
+    //     {
+    //         fn(i);
+    //     }
+    // });
+    // threads[1].do_task([&]{  
+    //     for(size_t i = block_size; i < block_size * 2; ++i)
+    //     {
+    //         fn(i);
+    //     }
+    // });
+    // threads[2].do_task([&]{  
+    //     for(size_t i = block_size * 2; i < block_size * 3; ++i)
+    //     {
+    //         fn(i);
+    //     }
+    // });
+
+    size_t offset = 0;
+    for(size_t i = 0; i < 3; ++i)
+    {
+        threads[i].do_task([&, offset]{  
+            for(size_t j = offset; j < offset + block_size; ++j)
+            {
+                fn(j);
+            }
+        });
+        offset += block_size;
+    }
+
+    // std::thread j1{[&]{  
+    //     for(size_t i = 0; i < block_size; ++i)
+    //     {
+    //         fn(i);
+    //     }
+    // }};
+
+    // std::thread j2{[&]{  
+    //     for(size_t i = block_size; i < block_size * 2; ++i)
+    //     {
+    //         fn(i);
+    //     }
+    // }};
+
+    // std::thread j3{[&]{  
+    //     for(size_t i = block_size * 2; i < block_size * 3; ++i)
+    //     {
+    //         fn(i);
+    //     }
+    // }};
+
+    
+    for(size_t i = block_size * 3; i < size; ++i)
+    {
+        fn(i);
+    }
+
+    // threads[0].wait_idle();
+    // threads[1].wait_idle();
+    // threads[2].wait_idle();
+    for(auto& thread : threads)
+    {
+        thread.wait_idle();
+    }
+
+    // j1.join();
+    // j2.join();
+    // j3.join();
+}
+
 void minist_test()
 {
     using Node = Neuron<Sigmoid<>>;
@@ -191,17 +300,28 @@ void minist_test()
         ++learning_cycle_count;
         correct_count = 0;
 
+        // system("PAUSE");
+        // auto begin = std::chrono::system_clock::now();
+
         for(size_t i = 0; i < train_set.count; ++i)
         {
             size_t image_offset = train_set.image_size * i;
-            for(size_t j = 0; j < input_layer.size(); ++j)
-            {
+            
+            for_each(input_layer.size(), [&](size_t j){
                 input_layer[j].value() = train_set.images[image_offset + j] / 255.0f;
-            }
-            for(auto& hidden_node : hidden_layer)
-            {
-                hidden_node.update();
-            }
+            });
+            // for(size_t j = 0; j < input_layer.size(); ++j)
+            // {
+            //     input_layer[j].value() = train_set.images[image_offset + j] / 255.0f;
+            // }
+            
+            for_each(hidden_layer.size(), [&](size_t j){
+                hidden_layer[j].update();
+            });
+            // for(auto& hidden_node : hidden_layer)
+            // {
+            //     hidden_node.update();
+            // }
 
             std::array<float, 10> targets{};
             targets[train_set.labels[i]] = 1.0f;
@@ -220,28 +340,43 @@ void minist_test()
                 float error = output_layer[k].value() - targets[k];
                 output_layer[k].value() = 2.0f * error * derivation(Sigmoid<>{})(output_layer[k].input());
             }
+
+
             if(result == train_set.labels[i])
             {
                 ++correct_count;
             }
 
-            for(auto& hidden_node : hidden_layer)
-            {
-                hidden_node.inverse_update(learning_rate);
-            }
-            for(auto& input_node : input_layer)
-            {
-                input_node.inverse_update(learning_rate);
-            }
+            for_each(hidden_layer.size(), [&](size_t j){
+                hidden_layer[j].inverse_update(learning_rate);
+            });
+            // for(auto& hidden_node : hidden_layer)
+            // {
+            //     hidden_node.inverse_update(learning_rate);
+            // }
+
+            for_each(input_layer.size(), [&](size_t j){
+                input_layer[j].inverse_update(learning_rate);
+            });
+            // for(auto& input_node : input_layer)
+            // {
+            //     input_node.inverse_update(learning_rate);
+            // }
         }
+
+        // auto end = std::chrono::system_clock::now();
+        // system("PAUSE");
+        // std::cout << "spend " << std::chrono::duration<double>(end - begin).count() << "s\n";          
+
         if(correct_count > last_correct_count)
         {
             std::cout << "correct count: " << correct_count << ", learning_cycle_count: " << learning_cycle_count << '\n';
         }
-    }while(correct_count < train_set.count && learning_cycle_count <= 10);
+    }while(correct_count < train_set.count && learning_cycle_count < 60);
 
     std::puts("learning complete.");
 
+    //test
     auto test_set = read_minist_set("MNIST/t10k-labels.idx1-ubyte", "MNIST/t10k-images.idx3-ubyte");
 
     correct_count = 0;
