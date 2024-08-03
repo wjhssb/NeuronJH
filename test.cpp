@@ -10,6 +10,9 @@
 #include <ranges>
 #include <neuron_jh/neuron.hpp>
 
+#include <neuron_jh/net.hpp>
+//#include <neuron_jh/neuron.hpp>
+
 void unary_fn_test(auto fn, float start, float end, float step = 0.05f, float loss_target = 0.00001f, float learning_rate = 0.5f)
 {
     Neuron<Sigmoid<>> a{};
@@ -25,6 +28,7 @@ void unary_fn_test(auto fn, float start, float end, float step = 0.05f, float lo
     Neuron<Sigmoid<>>::connect(a, b2, 0.5f);
     Neuron<Sigmoid<>>::connect(a, b3, 0.3f);
     Neuron<Sigmoid<>>::connect(a, b4, -0.7f);
+
     Neuron<Sigmoid<>>::connect(b1, c, -1.0f);
     Neuron<Sigmoid<>>::connect(b2, c, 1.0f);
     Neuron<Sigmoid<>>::connect(b3, c, -1.0f);
@@ -37,15 +41,17 @@ void unary_fn_test(auto fn, float start, float end, float step = 0.05f, float lo
         ++n;
         max_loss = 0.0f;
         for(float x = start; x < end; x += step)
-        {
+        {  
+            float y = fn(x);
             a.value() = x;
+           
             b1.update();
             b2.update();
             b3.update();
             b4.update();
             c.update();
 
-            float target = fn(x);
+            float target = y;
             float error = c.value() - target;
             float loss = error * error;
 
@@ -157,11 +163,6 @@ public:
     thread() : base_{ [&]{ while(true){ have_task_.acquire(); task_(); task_complete_.release(); } } }
     {}
 
-    ~thread()
-    {
-        base_.join();
-    }
-
     template<typename F>
     void do_task(F&& task)
     {
@@ -177,9 +178,9 @@ public:
 
 void for_each(size_t size, auto&& fn)
 {
-    static thread threads[3]{};
+    static thread threads[7]{};
 
-    size_t block_size = size / 4;
+    size_t block_size = size / 8;
 
     // threads[0].do_task([&]{  
     //     for(size_t i = 0; i < block_size; ++i)
@@ -201,7 +202,7 @@ void for_each(size_t size, auto&& fn)
     // });
 
     size_t offset = 0;
-    for(size_t i = 0; i < 3; ++i)
+    for(size_t i = 0; i < 7; ++i)
     {
         threads[i].do_task([&, offset]{  
             for(size_t j = offset; j < offset + block_size; ++j)
@@ -234,7 +235,7 @@ void for_each(size_t size, auto&& fn)
     // }};
 
     
-    for(size_t i = block_size * 3; i < size; ++i)
+    for(size_t i = block_size * 7; i < size; ++i)
     {
         fn(i);
     }
@@ -256,6 +257,11 @@ void minist_test()
 {
     using Node = Neuron<Sigmoid<>>;
     
+    std::vector<float> v1{ 3 };//这玩意是只有一个元素的vector，那个元素的值是3
+    std::vector<float> v2( 3 );//这玩意是3个元素的vector
+
+    //Node::
+
     //init random
     std::cout << "input seed: ";
     unsigned int seed;
@@ -300,8 +306,8 @@ void minist_test()
         ++learning_cycle_count;
         correct_count = 0;
 
-        // system("PAUSE");
-        // auto begin = std::chrono::system_clock::now();
+        system("PAUSE");
+        auto begin = std::chrono::system_clock::now();
 
         for(size_t i = 0; i < train_set.count; ++i)
         {
@@ -364,9 +370,9 @@ void minist_test()
             // }
         }
 
-        // auto end = std::chrono::system_clock::now();
-        // system("PAUSE");
-        // std::cout << "spend " << std::chrono::duration<double>(end - begin).count() << "s\n";          
+        auto end = std::chrono::system_clock::now();
+        system("PAUSE");
+        std::cout << "spend " << std::chrono::duration<double>(end - begin).count() << "s\n";          
 
         if(correct_count > last_correct_count)
         {
@@ -416,8 +422,30 @@ void minist_test()
     std::cout << "correct count: " << correct_count << '\n';
 }
 
+struct TestLayer
+{
+    auto forward(auto x)
+    {
+        return x * x;
+    }
+};
+
+struct TestLayer2
+{
+    auto forward(auto x)
+    {
+        return 2 * x;
+    }
+};
+
 int main()
 {
-    minist_test();
+    Net<TestLayer, TestLayer2> net1{ TestLayer{}, TestLayer2{} };
+    Net<TestLayer2, TestLayer> net2{ TestLayer2{}, TestLayer{} };
+
+    
+    std::cout << net1.forward(3) << '\n';
+    std::cout << net2.forward(3) << '\n';
+    //minist_test();
     //unary_fn_test([](auto x){ return 0.5f * x * x; }, 0.0f, 1.1f, 0.1f, 0.00001f, 0.5f);
 }

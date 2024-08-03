@@ -34,7 +34,7 @@ class Neuron
     using DendriteType = Dendrite<TActFn, TVal>;
     friend DendriteType;
 
-    TVal input_;
+    TVal input_;//加了一个input避免重复运算
     TVal value_;
     TActFn activation_fn_;
     
@@ -55,6 +55,7 @@ public:
 
     void update()
     {
+        //正向传播的时候把input和value都设置好
         input_ = 0;
         for(auto [sender, axon_index] : dendrites_)
         {
@@ -73,8 +74,10 @@ public:
         return input;
     }
 
+    //反向传播
     void inverse_update(TVal learning_rate)
     {
+        //反向传播的值，暂存
         auto inverse_value = inverse_input() * derivation(activation_fn_)(input());
 
         for(auto& [receiver, weight] : axons_)
@@ -101,10 +104,27 @@ struct Sigmoid
     }
 };
 
+// template<typename TVal = value_t>
+// struct SigmoidDer
+// {
+//     Sigmoid<TVal> sigmoid;
+
+//     TVal operator()(TVal x)const
+//     {
+//         return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x));
+//     }
+// };
+
+//这个就是取导数，没问题吧
 template<typename TVal>
 constexpr auto derivation(Sigmoid<TVal> sigmoid)
 {
+    //这样也行，一样的，反正sigmoid是空类
+    //这个捕获了啥？
     return [=](TVal x){  return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x)); };
+    // return [sigmoid](TVal x){  return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x)); };
+    //return SigmoidDer<TVal>{ sigmoid };
+    //这3句是一样的，能理解捕获啥意思了吧，就是lambda的类型里有个成员去存它的值就叫捕获它
 }
 
 template<typename TVal = value_t>
