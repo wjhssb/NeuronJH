@@ -127,6 +127,12 @@ constexpr auto derivation(Sigmoid<TVal> sigmoid)
     //这3句是一样的，能理解捕获啥意思了吧，就是lambda的类型里有个成员去存它的值就叫捕获它
 }
 
+template<typename TVal>
+constexpr auto gradient(const Sigmoid<TVal>& sigmoid)
+{
+    return [=](TVal x){  return sigmoid(x) * (static_cast<TVal>(1.0) - sigmoid(x)); };
+}
+
 template<typename TVal = value_t>
 struct Tanh
 {
